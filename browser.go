@@ -196,7 +196,7 @@ func (c *browser) readLoop() {
 
 			if res.ID == 0 && res.Method == "Runtime.consoleAPICalled" || res.Method == "Runtime.exceptionThrown" {
 
-				if c.config.Debug {
+				if (*c.config).Debug {
 					log.Println(params.Message)
 				}
 

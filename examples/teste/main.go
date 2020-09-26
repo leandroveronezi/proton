@@ -14,7 +14,7 @@ func main() {
 	conf.Title = "Photon First Test"
 	conf.Debug = false
 	conf.Args = proton.DefaultBrowserArgs
-	conf.UserDataDir = "./proton/userdata"
+	conf.UserDataDir = "./userdata"
 	conf.UserDataDirKeep = true
 	conf.Flavor = proton.Edge
 
@@ -27,7 +27,11 @@ func main() {
 
 	gui.Run()
 
-	gui.Navigate("http://www.uol.com.br")
+	gui.Bind("ola", func() string {
+		return "mundo"
+	})
+
+	gui.Navigate("https://www.wikipedia.org")
 
 	sigc := make(chan os.Signal)
 	signal.Notify(sigc, os.Interrupt)
