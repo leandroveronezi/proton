@@ -18,26 +18,34 @@ func main() {
 	conf.UserDataDirKeep = true
 	conf.Flavor = proton.Edge
 
-	gui, err := proton.New(conf)
+	browser := proton.Browser{}
+
+	err := browser.Run(conf)
 
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	gui.Run()
-
-	gui.Bind("ola", func() string {
+	browser.Bind("ola", func() string {
 		return "mundo"
 	})
 
-	gui.Navigate("https://www.wikipedia.org")
+	browser.Bind("goVersion", func() (proton.Version, error) {
+		return browser.GetVersion()
+	})
+
+	browser.Bind("captureScreenshot", func() (string, error) {
+		return browser.CaptureScreenshot(proton.ScreenshotParameters{Format: proton.JPEG.Pointer()})
+	})
+
+	browser.Navigate("https://www.wikipedia.org")
 
 	sigc := make(chan os.Signal)
 	signal.Notify(sigc, os.Interrupt)
 	select {
 	case <-sigc:
-	case <-gui.Done():
+	case <-browser.Done():
 	}
 
 }

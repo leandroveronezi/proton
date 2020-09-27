@@ -9,8 +9,12 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"os"
 	"os/exec"
+	"reflect"
 	"regexp"
+	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -34,8 +38,9 @@ type msg struct {
 	Params json.RawMessage `json:"params"`
 }
 
-type browser struct {
-	config *Config
+type Browser struct {
+	config Config
+	done   chan struct{}
 	sync.Mutex
 	cmd      *exec.Cmd
 	ws       *websocket.Conn
@@ -47,7 +52,7 @@ type browser struct {
 	bindings map[string]bindingFunc
 }
 
-func (c *browser) findTarget() (string, error) {
+func (c *Browser) findTarget() (string, error) {
 	err := websocket.JSON.Send(c.ws, h{
 		"id": 0, "method": "Target.setDiscoverTargets", "params": h{"discover": true},
 	})
@@ -74,7 +79,7 @@ func (c *browser) findTarget() (string, error) {
 	}
 }
 
-func (c *browser) startSession(target string) (string, error) {
+func (c *Browser) startSession(target string) (string, error) {
 	err := websocket.JSON.Send(c.ws, h{
 		"id": 1, "method": "Target.attachToTarget", "params": h{"targetId": target},
 	})
@@ -100,36 +105,7 @@ func (c *browser) startSession(target string) (string, error) {
 	}
 }
 
-// WindowState defines the state of the Chrome window, possible values are
-// "normal", "maximized", "minimized" and "fullscreen".
-type WindowState string
-
-const (
-	// WindowStateNormal defines a normal state of the browser window
-	WindowStateNormal WindowState = "normal"
-	// WindowStateMaximized defines a maximized state of the browser window
-	WindowStateMaximized WindowState = "maximized"
-	// WindowStateMinimized defines a minimized state of the browser window
-	WindowStateMinimized WindowState = "minimized"
-	// WindowStateFullscreen defines a fullscreen state of the browser window
-	WindowStateFullscreen WindowState = "fullscreen"
-)
-
-// Bounds defines settable window properties.
-type Bounds struct {
-	Left        int         `json:"left"`
-	Top         int         `json:"top"`
-	Width       int         `json:"width"`
-	Height      int         `json:"height"`
-	WindowState WindowState `json:"windowState"`
-}
-
-type windowTargetMessage struct {
-	WindowID int    `json:"windowId"`
-	Bounds   Bounds `json:"bounds"`
-}
-
-func (c *browser) getWindowForTarget(target string) (windowTargetMessage, error) {
+func (c *Browser) getWindowForTarget(target string) (windowTargetMessage, error) {
 	var m windowTargetMessage
 	msg, err := c.send("Browser.getWindowForTarget", h{"targetId": target})
 	if err != nil {
@@ -139,43 +115,7 @@ func (c *browser) getWindowForTarget(target string) (windowTargetMessage, error)
 	return m, err
 }
 
-type targetMessageTemplate struct {
-	ID     int    `json:"id"`
-	Method string `json:"method"`
-	Params struct {
-		Name    string `json:"name"`
-		Payload string `json:"payload"`
-		ID      int    `json:"executionContextId"`
-		Args    []struct {
-			Type  string      `json:"type"`
-			Value interface{} `json:"value"`
-		} `json:"args"`
-	} `json:"params"`
-	Error struct {
-		Message string `json:"message"`
-	} `json:"error"`
-	Result json.RawMessage `json:"result"`
-}
-
-type targetMessage struct {
-	targetMessageTemplate
-	Result struct {
-		Result struct {
-			Type        string          `json:"type"`
-			Subtype     string          `json:"subtype"`
-			Description string          `json:"description"`
-			Value       json.RawMessage `json:"value"`
-			ObjectID    string          `json:"objectId"`
-		} `json:"result"`
-		Exception struct {
-			Exception struct {
-				Value json.RawMessage `json:"value"`
-			} `json:"exception"`
-		} `json:"exceptionDetails"`
-	} `json:"result"`
-}
-
-func (c *browser) readLoop() {
+func (c *Browser) readLoop() {
 	for {
 		m := msg{}
 		if err := websocket.JSON.Receive(c.ws, &m); err != nil {
@@ -196,9 +136,10 @@ func (c *browser) readLoop() {
 
 			if res.ID == 0 && res.Method == "Runtime.consoleAPICalled" || res.Method == "Runtime.exceptionThrown" {
 
-				if (*c.config).Debug {
-					log.Println(params.Message)
+				if c.config.Debug {
+
 				}
+				log.Println(params.Message)
 
 			} else if res.ID == 0 && res.Method == "Runtime.bindingCalled" {
 				payload := struct {
@@ -272,7 +213,7 @@ func (c *browser) readLoop() {
 	}
 }
 
-func (c *browser) send(method string, params h) (json.RawMessage, error) {
+func (c *Browser) send(method string, params h) (json.RawMessage, error) {
 	id := atomic.AddInt32(&c.id, 1)
 	b, err := json.Marshal(h{"id": int(id), "method": method, "params": params})
 	if err != nil {
@@ -282,6 +223,8 @@ func (c *browser) send(method string, params h) (json.RawMessage, error) {
 	c.Lock()
 	c.pending[int(id)] = resc
 	c.Unlock()
+
+	log.Println(string(b))
 
 	if err := websocket.JSON.Send(c.ws, h{
 		"id":     int(id),
@@ -294,16 +237,16 @@ func (c *browser) send(method string, params h) (json.RawMessage, error) {
 	return res.Value, res.Err
 }
 
-func (c *browser) navigate(url string) error {
+func (c *Browser) Navigate(url string) error {
 	_, err := c.send("Page.navigate", h{"url": url})
 	return err
 }
 
-func (c *browser) eval(expr string) (json.RawMessage, error) {
+func (c *Browser) eval(expr string) (json.RawMessage, error) {
 	return c.send("Runtime.evaluate", h{"expression": expr, "awaitPromise": true, "returnByValue": true})
 }
 
-func (c *browser) bind(name string, f bindingFunc) error {
+func (c *Browser) bind(name string, f bindingFunc) error {
 	c.Lock()
 	// check if binding already exists
 	_, exists := c.bindings[name]
@@ -353,7 +296,7 @@ func (c *browser) bind(name string, f bindingFunc) error {
 	return err
 }
 
-func (c *browser) setBounds(b Bounds) error {
+func (c *Browser) setBounds(b Bounds) error {
 	if b.WindowState == "" {
 		b.WindowState = WindowStateNormal
 	}
@@ -365,7 +308,7 @@ func (c *browser) setBounds(b Bounds) error {
 	return err
 }
 
-func (c *browser) bounds() (Bounds, error) {
+func (c *Browser) bounds() (Bounds, error) {
 	result, err := c.send("Browser.getWindowBounds", h{"windowId": c.window})
 	if err != nil {
 		return Bounds{}, err
@@ -377,62 +320,44 @@ func (c *browser) bounds() (Bounds, error) {
 	return bounds.Bounds, err
 }
 
-func (c *browser) pdf(width, height int) ([]byte, error) {
-	result, err := c.send("Page.printToPDF", h{
-		"paperWidth":  float32(width) / 96,
-		"paperHeight": float32(height) / 96,
-	})
+func (c *Browser) GetVersion() (Version, error) {
+	result, err := c.send("Browser.getVersion", h{})
+
 	if err != nil {
-		return nil, err
+		return Version{}, err
 	}
-	pdf := struct {
-		Data []byte `json:"data"`
-	}{}
-	err = json.Unmarshal(result, &pdf)
-	return pdf.Data, err
+
+	version := Version{}
+	err = json.Unmarshal(result, &version)
+	return version, err
+
 }
 
-func (c *browser) png(x, y, width, height int, bg uint32, scale float32) ([]byte, error) {
-	if x == 0 && y == 0 && width == 0 && height == 0 {
-		// By default either use SVG size if it's an SVG, or use A4 page size
-		bounds, err := c.eval(`document.rootElement ? [document.rootElement.x.baseVal.value, document.rootElement.y.baseVal.value, document.rootElement.width.baseVal.value, document.rootElement.height.baseVal.value] : [0,0,816,1056]`)
-		if err != nil {
-			return nil, err
-		}
-		rect := make([]int, 4)
-		if err := json.Unmarshal(bounds, &rect); err != nil {
-			return nil, err
-		}
-		x, y, width, height = rect[0], rect[1], rect[2], rect[3]
-	}
+func (c *Browser) close() error {
 
-	_, err := c.send("Emulation.setDefaultBackgroundColorOverride", h{
-		"color": h{
-			"r": (bg >> 16) & 0xff,
-			"g": (bg >> 8) & 0xff,
-			"b": bg & 0xff,
-			"a": (bg >> 24) & 0xff,
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	result, err := c.send("Page.captureScreenshot", h{
-		"clip": h{
-			"x": x, "y": y, "width": width, "height": height, "scale": scale,
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	pdf := struct {
-		Data []byte `json:"data"`
-	}{}
-	err = json.Unmarshal(result, &pdf)
-	return pdf.Data, err
+	_, err := c.send("Browser.close ", h{})
+
+	return err
 }
 
-func (c *browser) kill() error {
+func (c *Browser) CaptureScreenshot(Parameters ScreenshotParameters) (string, error) {
+
+	result, err := c.send("Page.captureScreenshot", structToMap(Parameters))
+
+	if err != nil {
+		return "", err
+	}
+
+	data := struct {
+		Data string `json:"data"`
+	}{}
+
+	err = json.Unmarshal(result, &data)
+	return data.Data, err
+
+}
+
+func (c *Browser) kill() error {
 	if c.ws != nil {
 		if err := c.ws.Close(); err != nil {
 			return err
@@ -465,4 +390,209 @@ func contains(arr []string, x string) bool {
 		}
 	}
 	return false
+}
+
+func structToMap(s interface{}) h {
+
+	result, err := json.Marshal(s)
+
+	if err != nil {
+		return h{}
+	}
+
+	aux := h{}
+
+	err = json.Unmarshal(result, &aux)
+
+	if err != nil {
+		return h{}
+	}
+
+	for key, val := range aux {
+
+		if val == nil {
+			delete(aux, key)
+		}
+
+	}
+
+	return aux
+}
+
+func (_this *Browser) Bind(name string, f interface{}) error {
+	v := reflect.ValueOf(f)
+	// f must be a function
+	if v.Kind() != reflect.Func {
+		return errors.New("only functions can be bound")
+	}
+	// f must return either value and error or just error
+	if n := v.Type().NumOut(); n > 2 {
+		return errors.New("function may only return a value or a value+error")
+	}
+
+	return _this.bind(name, func(raw []json.RawMessage) (interface{}, error) {
+		if len(raw) != v.Type().NumIn() {
+			return nil, errors.New("function arguments mismatch")
+		}
+		args := []reflect.Value{}
+		for i := range raw {
+			arg := reflect.New(v.Type().In(i))
+			if err := json.Unmarshal(raw[i], arg.Interface()); err != nil {
+				return nil, err
+			}
+			args = append(args, arg.Elem())
+		}
+		errorType := reflect.TypeOf((*error)(nil)).Elem()
+		res := v.Call(args)
+		switch len(res) {
+		case 0:
+			// No results from the function, just return nil
+			return nil, nil
+		case 1:
+			// One result may be a value, or an error
+			if res[0].Type().Implements(errorType) {
+				if res[0].Interface() != nil {
+					return nil, res[0].Interface().(error)
+				}
+				return nil, nil
+			}
+			return res[0].Interface(), nil
+		case 2:
+			// Two results: first one is value, second is error
+			if !res[1].Type().Implements(errorType) {
+				return nil, errors.New("second return value must be an error")
+			}
+			if res[1].Interface() == nil {
+				return res[0].Interface(), nil
+			}
+			return res[0].Interface(), res[1].Interface().(error)
+		default:
+			return nil, errors.New("unexpected number of return values")
+		}
+	})
+}
+
+func (_this *Browser) Eval(js string) Value {
+	v, err := _this.eval(js)
+	return value{err: err, raw: v}
+}
+
+func (_this *Browser) SetBounds(b Bounds) error {
+	return _this.setBounds(b)
+}
+
+func (_this *Browser) Bounds() (Bounds, error) {
+	return _this.bounds()
+}
+
+func (_this *Browser) browserBinary() string {
+
+	if _this.config.BrowserBinary != "" {
+		return _this.config.BrowserBinary
+	}
+
+	if _this.config.Flavor == Chrome {
+		return _this.browserBinaryChrome()
+	}
+
+	return _this.browserBinaryEdge()
+
+}
+
+func (_this *Browser) browserBinaryEdge() string {
+
+	var paths []string
+	switch runtime.GOOS {
+	case "darwin":
+		return ""
+	case "windows":
+		paths = []string{
+			os.Getenv("LocalAppData") + "/Microsoft/Edge/Application/msedge.exe",
+			os.Getenv("ProgramFiles") + "/Microsoft/Edge/Application/msedge.exe",
+			os.Getenv("ProgramFiles(x86)") + "/Microsoft/Edge/Application/msedge.exe",
+		}
+	default:
+		return ""
+	}
+
+	for _, path := range paths {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			continue
+		}
+		return path
+	}
+	return ""
+
+}
+
+func (_this *Browser) browserBinaryChrome() string {
+
+	var paths []string
+	switch runtime.GOOS {
+	case "darwin":
+		paths = []string{
+			"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+			"/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
+			"/Applications/Chromium.app/Contents/MacOS/Chromium",
+			"/usr/bin/google-chrome-stable",
+			"/usr/bin/google-chrome",
+			"/usr/bin/chromium",
+			"/usr/bin/chromium-browser",
+		}
+	case "windows":
+		paths = []string{
+			"C:/Program Files/Google/Chrome/Application/chrome.exe",
+			os.Getenv("LocalAppData") + "/Google/Chrome/Application/chrome.exe",
+			os.Getenv("ProgramFiles") + "/Google/Chrome/Application/chrome.exe",
+			os.Getenv("ProgramFiles(x86)") + "/Google/Chrome/Application/chrome.exe",
+			os.Getenv("LocalAppData") + "/Chromium/Application/chrome.exe",
+			os.Getenv("ProgramFiles") + "/Chromium/Application/chrome.exe",
+			os.Getenv("ProgramFiles(x86)") + "/Chromium/Application/chrome.exe",
+		}
+	default:
+		paths = []string{
+			"/usr/bin/google-chrome-stable",
+			"/usr/bin/google-chrome",
+			"/usr/bin/chromium",
+			"/usr/bin/chromium-browser",
+			"/snap/bin/chromium",
+		}
+	}
+
+	for _, path := range paths {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			continue
+		}
+		return path
+	}
+	return ""
+
+}
+
+func (_this *Browser) Done() <-chan struct{} {
+	return _this.done
+}
+
+func (_this *Browser) Close() error {
+	// ignore err, as the chrome process might be already dead, when user close the window.
+	_this.kill()
+	<-_this.done
+
+	if !_this.config.UserDataDirKeep {
+		if err := os.RemoveAll(_this.config.UserDataDir); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (_this *Browser) genEmptyHtml() string {
+
+	template := `data:text/html,<!DOCTYPE html><html><head><title>{{title}}</title></head><body></body></html>`
+
+	template = strings.ReplaceAll(template, "{{title}}", _this.config.Title)
+
+	return template
+
 }

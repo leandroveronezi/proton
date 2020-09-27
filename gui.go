@@ -1,274 +1,113 @@
 package proton
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"golang.org/x/net/websocket"
 	"io/ioutil"
-	"os"
 	"os/exec"
-	"reflect"
 	"regexp"
-	"runtime"
-	"strings"
 )
 
-type gui struct {
-	done    chan struct{}
-	config  Config
-	browser *browser
+func (_this *Browser) Run(conf ...Config) error {
+
+	if len(conf) > 0 {
+		_this.config = conf[0]
+	}
+
+	if _this.config.BrowserBinary == "" {
+		_this.config.BrowserBinary = _this.browserBinary()
+
+		if _this.config.BrowserBinary == "" {
+			return errors.New("Binary not found")
+		}
+
+	}
+
+	if _this.config.Url == "" {
+		_this.config.Url = _this.genEmptyHtml()
+	}
+
+	if _this.config.UserDataDir == "" {
+
+		tempFolder, err := ioutil.TempDir("", "proton/userdata")
+		if err != nil {
+			return err
+		}
+
+		_this.config.UserDataDir = tempFolder
+
+	}
+
+	args := append(_this.config.Args, fmt.Sprintf("--app=%s", _this.config.Url))
+	args = append(args, fmt.Sprintf("--user-data-dir=%s", _this.config.UserDataDir))
+
+	if _this.config.Height <= 0 || _this.config.Width <= 0 {
+		args = append(args, "--start-maximized")
+	} else {
+		args = append(args, fmt.Sprintf("--window-size=%d,%d", _this.config.Width, _this.config.Height))
+	}
+
+	if _this.config.Debug {
+		args = append(args, "--auto-open-devtools-for-tabs")
+	}
+
+	args = append(args, "--remote-debugging-port=0")
+
+	_this.config.Args = args
+
+	return _this.makeBrowser()
+
 }
 
-func (_this *gui) genEmptyHtml() string {
+func (_this *Browser) makeBrowser() error {
 
-	template := `data:text/html,<!DOCTYPE html><html><head><title>{{title}}</title></head><body></body></html>`
+	// The first two IDs are used internally during the initialization
+	_this.id = 2
+	_this.pending = map[int]chan result{}
+	_this.bindings = map[string]bindingFunc{}
 
-	template = strings.ReplaceAll(template, "{{title}}", _this.config.Title)
-
-	return template
-
-}
-
-func (_this *gui) Navigate(url string) error {
-	return _this.browser.navigate(url)
-}
-
-func (_this *gui) Run() error {
-
-	chrome, err := _this.newBrowser()
-	done := make(chan struct{})
+	// Start chrome process
+	_this.cmd = exec.Command(_this.config.BrowserBinary, _this.config.Args...)
+	pipe, err := _this.cmd.StderrPipe()
 	if err != nil {
 		return err
 	}
-
-	go func() {
-		chrome.cmd.Wait()
-		close(done)
-	}()
-
-	_this.browser = chrome
-	_this.done = done
-
-	return nil
-
-}
-
-func (_this *gui) Done() <-chan struct{} {
-	return _this.done
-}
-
-func (_this *gui) Close() error {
-	// ignore err, as the chrome process might be already dead, when user close the window.
-	_this.browser.kill()
-	<-_this.done
-
-	if !_this.config.UserDataDirKeep {
-		if err := os.RemoveAll(_this.config.UserDataDir); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (_this *gui) Bind(name string, f interface{}) error {
-	v := reflect.ValueOf(f)
-	// f must be a function
-	if v.Kind() != reflect.Func {
-		return errors.New("only functions can be bound")
-	}
-	// f must return either value and error or just error
-	if n := v.Type().NumOut(); n > 2 {
-		return errors.New("function may only return a value or a value+error")
-	}
-
-	return _this.browser.bind(name, func(raw []json.RawMessage) (interface{}, error) {
-		if len(raw) != v.Type().NumIn() {
-			return nil, errors.New("function arguments mismatch")
-		}
-		args := []reflect.Value{}
-		for i := range raw {
-			arg := reflect.New(v.Type().In(i))
-			if err := json.Unmarshal(raw[i], arg.Interface()); err != nil {
-				return nil, err
-			}
-			args = append(args, arg.Elem())
-		}
-		errorType := reflect.TypeOf((*error)(nil)).Elem()
-		res := v.Call(args)
-		switch len(res) {
-		case 0:
-			// No results from the function, just return nil
-			return nil, nil
-		case 1:
-			// One result may be a value, or an error
-			if res[0].Type().Implements(errorType) {
-				if res[0].Interface() != nil {
-					return nil, res[0].Interface().(error)
-				}
-				return nil, nil
-			}
-			return res[0].Interface(), nil
-		case 2:
-			// Two results: first one is value, second is error
-			if !res[1].Type().Implements(errorType) {
-				return nil, errors.New("second return value must be an error")
-			}
-			if res[1].Interface() == nil {
-				return res[0].Interface(), nil
-			}
-			return res[0].Interface(), res[1].Interface().(error)
-		default:
-			return nil, errors.New("unexpected number of return values")
-		}
-	})
-}
-
-func (_this *gui) Eval(js string) Value {
-	v, err := _this.browser.eval(js)
-	return value{err: err, raw: v}
-}
-
-func (_this *gui) SetBounds(b Bounds) error {
-	return _this.browser.setBounds(b)
-}
-
-func (_this *gui) Bounds() (Bounds, error) {
-	return _this.browser.bounds()
-}
-
-func (_this *gui) browserBinary() string {
-
-	if _this.config.BrowserBinary != "" {
-		return _this.config.BrowserBinary
-	}
-
-	if _this.config.Flavor == Chrome {
-		return _this.browserBinaryChrome()
-	}
-
-	return _this.browserBinaryEdge()
-
-}
-
-func (_this *gui) browserBinaryEdge() string {
-
-	var paths []string
-	switch runtime.GOOS {
-	case "darwin":
-		return ""
-	case "windows":
-		paths = []string{
-			os.Getenv("LocalAppData") + "/Microsoft/Edge/Application/msedge.exe",
-			os.Getenv("ProgramFiles") + "/Microsoft/Edge/Application/msedge.exe",
-			os.Getenv("ProgramFiles(x86)") + "/Microsoft/Edge/Application/msedge.exe",
-		}
-	default:
-		return ""
-	}
-
-	for _, path := range paths {
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			continue
-		}
-		return path
-	}
-	return ""
-
-}
-
-func (_this *gui) browserBinaryChrome() string {
-
-	var paths []string
-	switch runtime.GOOS {
-	case "darwin":
-		paths = []string{
-			"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-			"/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
-			"/Applications/Chromium.app/Contents/MacOS/Chromium",
-			"/usr/bin/google-chrome-stable",
-			"/usr/bin/google-chrome",
-			"/usr/bin/chromium",
-			"/usr/bin/chromium-browser",
-		}
-	case "windows":
-		paths = []string{
-			os.Getenv("LocalAppData") + "/Google/Chrome/Application/chrome.exe",
-			os.Getenv("ProgramFiles") + "/Google/Chrome/Application/chrome.exe",
-			os.Getenv("ProgramFiles(x86)") + "/Google/Chrome/Application/chrome.exe",
-			os.Getenv("LocalAppData") + "/Chromium/Application/chrome.exe",
-			os.Getenv("ProgramFiles") + "/Chromium/Application/chrome.exe",
-			os.Getenv("ProgramFiles(x86)") + "/Chromium/Application/chrome.exe",
-		}
-	default:
-		paths = []string{
-			"/usr/bin/google-chrome-stable",
-			"/usr/bin/google-chrome",
-			"/usr/bin/chromium",
-			"/usr/bin/chromium-browser",
-			"/snap/bin/chromium",
-		}
-	}
-
-	for _, path := range paths {
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			continue
-		}
-		return path
-	}
-	return ""
-
-}
-
-func (_this *gui) newBrowser() (*browser, error) {
-
-	// The first two IDs are used internally during the initialization
-	c := &browser{
-		id:       2,
-		pending:  map[int]chan result{},
-		bindings: map[string]bindingFunc{},
-	}
-
-	// Start chrome process
-	c.cmd = exec.Command(_this.config.BrowserBinary, _this.config.Args...)
-	pipe, err := c.cmd.StderrPipe()
-	if err != nil {
-		return nil, err
-	}
-	if err := c.cmd.Start(); err != nil {
-		return nil, err
+	if err := _this.cmd.Start(); err != nil {
+		return err
 	}
 
 	// Wait for websocket address to be printed to stderr
 	re := regexp.MustCompile(`^DevTools listening on (ws://.*?)\r?\n$`)
 	m, err := readUntilMatch(pipe, re)
 	if err != nil {
-		c.kill()
-		return nil, err
+		_this.kill()
+		return err
 	}
 	wsURL := m[1]
 
 	// Open a websocket
-	c.ws, err = websocket.Dial(wsURL, "", "http://127.0.0.1")
+	_this.ws, err = websocket.Dial(wsURL, "", "http://127.0.0.1")
 	if err != nil {
-		c.kill()
-		return nil, err
+		_this.kill()
+		return err
 	}
 
 	// Find target and initialize session
-	c.target, err = c.findTarget()
+	_this.target, err = _this.findTarget()
 	if err != nil {
-		c.kill()
-		return nil, err
+		_this.kill()
+		return err
 	}
 
-	c.session, err = c.startSession(c.target)
+	_this.session, err = _this.startSession(_this.target)
 	if err != nil {
-		c.kill()
-		return nil, err
+		_this.kill()
+		return err
 	}
-	go c.readLoop()
+
+	go _this.readLoop()
+
 	for method, args := range map[string]h{
 		"Page.enable":          nil,
 		"Target.setAutoAttach": {"autoAttach": true, "waitForDebuggerOnStart": false},
@@ -278,69 +117,36 @@ func (_this *gui) newBrowser() (*browser, error) {
 		"Performance.enable":   nil,
 		"Log.enable":           nil,
 	} {
-		if _, err := c.send(method, args); err != nil {
-			c.kill()
-			c.cmd.Wait()
-			return nil, err
+
+		if _, err := _this.send(method, args); err != nil {
+			_this.kill()
+			_this.cmd.Wait()
+			return err
 		}
+
 	}
 
 	if !contains(_this.config.Args, "--headless") {
-		win, err := c.getWindowForTarget(c.target)
+		win, err := _this.getWindowForTarget(_this.target)
 		if err != nil {
-			c.kill()
-			return nil, err
+			_this.kill()
+			return err
 		}
-		c.window = win.WindowID
+		_this.window = win.WindowID
 	}
 
-	return c, nil
-}
-
-func New(conf ...Config) (*gui, error) {
-
-	newGui := gui{}
-
-	if len(conf) > 0 {
-		newGui.config = conf[0]
+	done := make(chan struct{})
+	if err != nil {
+		return err
 	}
 
-	if newGui.config.BrowserBinary == "" {
-		newGui.config.BrowserBinary = newGui.browserBinary()
-	}
+	go func() {
+		_this.cmd.Wait()
+		close(done)
+	}()
 
-	if newGui.config.Url == "" {
-		newGui.config.Url = newGui.genEmptyHtml()
-	}
+	_this.done = done
 
-	if newGui.config.UserDataDir == "" {
-
-		tempFolder, err := ioutil.TempDir("", "proton/userdata")
-		if err != nil {
-			return nil, err
-		}
-
-		newGui.config.UserDataDir = tempFolder
-
-	}
-
-	args := append(newGui.config.Args, fmt.Sprintf("--app=%s", newGui.config.Url))
-	args = append(args, fmt.Sprintf("--user-data-dir=%s", newGui.config.UserDataDir))
-
-	if newGui.config.Height == 0 || newGui.config.Width == 0 {
-		args = append(args, "--start-maximized")
-	} else {
-		args = append(args, fmt.Sprintf("--window-size=%d,%d", newGui.config.Width, newGui.config.Height))
-	}
-
-	if newGui.config.Debug {
-		args = append(args, "--auto-open-devtools-for-tabs")
-	}
-
-	args = append(args, "--remote-debugging-port=0")
-
-	newGui.config.Args = args
-
-	return &newGui, nil
+	return nil
 
 }
