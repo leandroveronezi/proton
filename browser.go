@@ -333,6 +333,41 @@ func (c *Browser) GetVersion() (Version, error) {
 
 }
 
+func (c *Browser) ClearBrowserCache() error {
+
+	_, err := c.send("Browser.clearBrowserCache", h{})
+
+	return err
+
+}
+
+func (c *Browser) ClearBrowserCookies() error {
+
+	_, err := c.send("Browser.clearBrowserCookies", h{})
+
+	return err
+
+}
+
+func (c *Browser) NetworkDisable() error {
+
+	_, err := c.send("Network.disable", h{})
+
+	return err
+
+}
+
+/*
+maxPostDataSize
+func (c *Browser) NetworkEnable() error {
+
+	_, err := c.send("Network.enable", h{})
+
+	return err
+
+}
+*/
+
 func (c *Browser) close() error {
 
 	_, err := c.send("Browser.close ", h{})
