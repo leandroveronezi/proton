@@ -53,8 +53,8 @@ type Browser struct {
 	bindings map[string]bindingFunc
 }
 
-func (c *Browser) findTarget() (string, error) {
-	err := websocket.JSON.Send(c.ws, h{
+func (_this *Browser) findTarget() (string, error) {
+	err := websocket.JSON.Send(_this.ws, h{
 		"id": 0, "method": "Target.setDiscoverTargets", "params": h{"discover": true},
 	})
 	if err != nil {
@@ -62,7 +62,7 @@ func (c *Browser) findTarget() (string, error) {
 	}
 	for {
 		m := msg{}
-		if err = websocket.JSON.Receive(c.ws, &m); err != nil {
+		if err = websocket.JSON.Receive(_this.ws, &m); err != nil {
 			return "", err
 		} else if m.Method == "Target.targetCreated" {
 			target := struct {
@@ -80,8 +80,8 @@ func (c *Browser) findTarget() (string, error) {
 	}
 }
 
-func (c *Browser) startSession(target string) (string, error) {
-	err := websocket.JSON.Send(c.ws, h{
+func (_this *Browser) startSession(target string) (string, error) {
+	err := websocket.JSON.Send(_this.ws, h{
 		"id": 1, "method": "Target.attachToTarget", "params": h{"targetId": target},
 	})
 	if err != nil {
@@ -89,7 +89,7 @@ func (c *Browser) startSession(target string) (string, error) {
 	}
 	for {
 		m := msg{}
-		if err = websocket.JSON.Receive(c.ws, &m); err != nil {
+		if err = websocket.JSON.Receive(_this.ws, &m); err != nil {
 			return "", err
 		} else if m.ID == 1 {
 			if m.Error != nil {
@@ -106,9 +106,9 @@ func (c *Browser) startSession(target string) (string, error) {
 	}
 }
 
-func (c *Browser) getWindowForTarget(target string) (windowTargetMessage, error) {
+func (_this *Browser) getWindowForTarget(target string) (windowTargetMessage, error) {
 	var m windowTargetMessage
-	msg, err := c.send("Browser.getWindowForTarget", h{"targetId": target})
+	msg, err := _this.send("Browser.getWindowForTarget", h{"targetId": target})
 	if err != nil {
 		return m, err
 	}
@@ -116,10 +116,10 @@ func (c *Browser) getWindowForTarget(target string) (windowTargetMessage, error)
 	return m, err
 }
 
-func (c *Browser) readLoop() {
+func (_this *Browser) readLoop() {
 	for {
 		m := msg{}
-		if err := websocket.JSON.Receive(c.ws, &m); err != nil {
+		if err := websocket.JSON.Receive(_this.ws, &m); err != nil {
 			return
 		}
 
@@ -129,7 +129,7 @@ func (c *Browser) readLoop() {
 				Message   string `json:"message"`
 			}{}
 			json.Unmarshal(m.Params, &params)
-			if params.SessionID != c.session {
+			if params.SessionID != _this.session {
 				continue
 			}
 			res := targetMessage{}
@@ -137,7 +137,7 @@ func (c *Browser) readLoop() {
 
 			if res.ID == 0 && res.Method == "Runtime.consoleAPICalled" || res.Method == "Runtime.exceptionThrown" {
 
-				if c.config.Debug {
+				if _this.config.Debug {
 					log.Println(params.Message)
 				}
 
@@ -149,9 +149,9 @@ func (c *Browser) readLoop() {
 				}{}
 				json.Unmarshal([]byte(res.Params.Payload), &payload)
 
-				c.Lock()
-				binding, ok := c.bindings[res.Params.Name]
-				c.Unlock()
+				_this.Lock()
+				binding, ok := _this.bindings[res.Params.Name]
+				_this.Unlock()
 				if ok {
 					jsString := func(v interface{}) string { b, _ := json.Marshal(v); return string(b) }
 					go func() {
@@ -172,16 +172,16 @@ func (c *Browser) readLoop() {
 							window['%[1]s']['callbacks'].delete(%[2]d);
 							window['%[1]s']['errors'].delete(%[2]d);
 							`, payload.Name, payload.Seq, result, error)
-						c.send("Runtime.evaluate", h{"expression": expr, "contextId": res.Params.ID})
+						_this.send("Runtime.evaluate", h{"expression": expr, "contextId": res.Params.ID})
 					}()
 				}
 				continue
 			}
 
-			c.Lock()
-			resc, ok := c.pending[res.ID]
-			delete(c.pending, res.ID)
-			c.Unlock()
+			_this.Lock()
+			resc, ok := _this.pending[res.ID]
+			delete(_this.pending, res.ID)
+			_this.Unlock()
 
 			if !ok {
 				continue
@@ -205,33 +205,33 @@ func (c *Browser) readLoop() {
 				TargetID string `json:"targetId"`
 			}{}
 			json.Unmarshal(m.Params, &params)
-			if params.TargetID == c.target {
-				c.kill(true)
+			if params.TargetID == _this.target {
+				_this.kill(true)
 				return
 			}
 		}
 	}
 }
 
-func (c *Browser) send(method string, params h) (json.RawMessage, error) {
-	id := atomic.AddInt32(&c.id, 1)
+func (_this *Browser) send(method string, params h) (json.RawMessage, error) {
+	id := atomic.AddInt32(&_this.id, 1)
 	b, err := json.Marshal(h{"id": int(id), "method": method, "params": params})
 	if err != nil {
 		return nil, err
 	}
 	resc := make(chan result)
-	c.Lock()
-	c.pending[int(id)] = resc
-	c.Unlock()
+	_this.Lock()
+	_this.pending[int(id)] = resc
+	_this.Unlock()
 
-	if c.config.Debug {
+	if _this.config.Debug {
 		log.Println(string(b))
 	}
 
-	if err := websocket.JSON.Send(c.ws, h{
+	if err := websocket.JSON.Send(_this.ws, h{
 		"id":     int(id),
 		"method": "Target.sendMessageToTarget",
-		"params": h{"message": string(b), "sessionId": c.session},
+		"params": h{"message": string(b), "sessionId": _this.session},
 	}); err != nil {
 		return nil, err
 	}
@@ -239,22 +239,22 @@ func (c *Browser) send(method string, params h) (json.RawMessage, error) {
 	return res.Value, res.Err
 }
 
-func (c *Browser) Navigate(url string) error {
-	_, err := c.send("Page.navigate", h{"url": url})
+func (_this *Browser) Navigate(url string) error {
+	_, err := _this.send("Page.navigate", h{"url": url})
 	return err
 }
 
-func (c *Browser) eval(expr string) (json.RawMessage, error) {
-	return c.send("Runtime.evaluate", h{"expression": expr, "awaitPromise": true, "returnByValue": true})
+func (_this *Browser) eval(expr string) (json.RawMessage, error) {
+	return _this.send("Runtime.evaluate", h{"expression": expr, "awaitPromise": true, "returnByValue": true})
 }
 
-func (c *Browser) bind(name string, f bindingFunc) error {
-	c.Lock()
+func (_this *Browser) bind(name string, f bindingFunc) error {
+	_this.Lock()
 	// check if binding already exists
-	_, exists := c.bindings[name]
+	_, exists := _this.bindings[name]
 
-	c.bindings[name] = f
-	c.Unlock()
+	_this.bindings[name] = f
+	_this.Unlock()
 
 	if exists {
 		// Just replace callback and return, as the binding was already added to js
@@ -262,7 +262,7 @@ func (c *Browser) bind(name string, f bindingFunc) error {
 		return nil
 	}
 
-	if _, err := c.send("Runtime.addBinding", h{"name": name}); err != nil {
+	if _, err := _this.send("Runtime.addBinding", h{"name": name}); err != nil {
 		return err
 	}
 	script := fmt.Sprintf(`(() => {
@@ -290,28 +290,28 @@ func (c *Browser) bind(name string, f bindingFunc) error {
 		return promise;
 	}})();
 	`, name)
-	_, err := c.send("Page.addScriptToEvaluateOnNewDocument", h{"source": script})
+	_, err := _this.send("Page.addScriptToEvaluateOnNewDocument", h{"source": script})
 	if err != nil {
 		return err
 	}
-	_, err = c.eval(script)
+	_, err = _this.eval(script)
 	return err
 }
 
-func (c *Browser) setBounds(b Bounds) error {
+func (_this *Browser) setBounds(b Bounds) error {
 	if b.WindowState == "" {
 		b.WindowState = WindowStateNormal
 	}
-	param := h{"windowId": c.window, "bounds": b}
+	param := h{"windowId": _this.window, "bounds": b}
 	if b.WindowState != WindowStateNormal {
 		param["bounds"] = h{"windowState": b.WindowState}
 	}
-	_, err := c.send("Browser.setWindowBounds", param)
+	_, err := _this.send("Browser.setWindowBounds", param)
 	return err
 }
 
-func (c *Browser) bounds() (Bounds, error) {
-	result, err := c.send("Browser.getWindowBounds", h{"windowId": c.window})
+func (_this *Browser) bounds() (Bounds, error) {
+	result, err := _this.send("Browser.getWindowBounds", h{"windowId": _this.window})
 	if err != nil {
 		return Bounds{}, err
 	}
@@ -322,8 +322,8 @@ func (c *Browser) bounds() (Bounds, error) {
 	return bounds.Bounds, err
 }
 
-func (c *Browser) GetVersion() (Version, error) {
-	result, err := c.send("Browser.getVersion", h{})
+func (_this *Browser) GetVersion() (Version, error) {
+	result, err := _this.send("Browser.getVersion", h{})
 
 	if err != nil {
 		return Version{}, err
@@ -335,40 +335,42 @@ func (c *Browser) GetVersion() (Version, error) {
 
 }
 
-func (c *Browser) ClearBrowserCache() error {
+func (_this *Browser) ClearBrowserCache() error {
 
-	_, err := c.send("Browser.clearBrowserCache", h{})
-
-	return err
-
-}
-
-func (c *Browser) ClearBrowserCookies() error {
-
-	_, err := c.send("Browser.clearBrowserCookies", h{})
+	_, err := _this.send("Browser.clearBrowserCache", h{})
 
 	return err
 
 }
 
-func (c *Browser) NetworkDisable() error {
+func (_this *Browser) ClearBrowserCookies() error {
 
-	_, err := c.send("Network.disable", h{})
+	_, err := _this.send("Browser.clearBrowserCookies", h{})
 
 	return err
 
 }
 
-func (c *Browser) close() error {
+func (_this *Browser) NetworkDisable() error {
 
-	_, err := c.send("Browser.close ", h{})
+	_, err := _this.send("Network.disable", h{})
+
+	return err
+
+}
+
+/*
+func (_this *Browser) close() error {
+
+	_, err := _this.send("Browser.close ", h{})
 
 	return err
 }
+*/
 
-func (c *Browser) CaptureScreenshot(Parameters ScreenshotParameters) (string, error) {
+func (_this *Browser) CaptureScreenshot(Parameters ScreenshotParameters) (string, error) {
 
-	result, err := c.send("Page.captureScreenshot", structToMap(Parameters))
+	result, err := _this.send("Page.captureScreenshot", structToMap(Parameters))
 
 	if err != nil {
 		return "", err
@@ -383,11 +385,11 @@ func (c *Browser) CaptureScreenshot(Parameters ScreenshotParameters) (string, er
 
 }
 
-func (c *Browser) kill(exited bool) error {
+func (_this *Browser) kill(exited bool) error {
 
-	if c.ws != nil {
+	if _this.ws != nil {
 
-		if err := c.ws.Close(); err != nil {
+		if err := _this.ws.Close(); err != nil {
 			return err
 		}
 
@@ -398,7 +400,7 @@ func (c *Browser) kill(exited bool) error {
 	}
 
 	// TODO: cancel all pending requests
-	if state := c.cmd.ProcessState; state == nil || !state.Exited() {
+	if state := _this.cmd.ProcessState; state == nil || !state.Exited() {
 
 		sig := os.Interrupt
 
@@ -406,11 +408,11 @@ func (c *Browser) kill(exited bool) error {
 			sig = os.Kill
 		}
 
-		if err := c.cmd.Process.Signal(sig); err != nil {
+		if err := _this.cmd.Process.Signal(sig); err != nil {
 			return err
 		}
 
-		return c.cmd.Process.Kill()
+		return _this.cmd.Process.Kill()
 	}
 
 	return nil
@@ -651,8 +653,8 @@ func (_this *Browser) genEmptyHtml() string {
 
 	template := `<!DOCTYPE html><html><head><title>{{title}}</title></head><body></body></html>`
 
-	/*
-			template := `
+	/* * /
+	template = `
 		<!DOCTYPE html>
 		<html>
 			<head>
@@ -683,7 +685,7 @@ func (_this *Browser) genEmptyHtml() string {
 			</div>
 		</body></html>
 		`
-	*/
+	/**/
 
 	template = strings.ReplaceAll(template, "{{title}}", _this.config.Title)
 
