@@ -8,17 +8,23 @@ const (
 )
 
 type Config struct {
-	Title           string
-	Url             string
-	Debug           bool
-	UserDataDir     string
-	UserDataDirKeep bool
-	Width           int
-	Height          int
-	WindowState     WindowState
-	Flavor          flavor
-	Args            []string
-	BrowserBinary   string
+	Title              string
+	Url                string
+	Debug              bool
+	UserDataDir        string
+	UserDataDirKeep    bool
+	Width              int
+	Height             int
+	WindowState        WindowState
+	StartFullscreen    bool
+	Kiosk              bool
+	KioskPrinting      bool
+	Incognito          bool
+	RestoreLastSession bool
+	SilentLaunch       bool
+	Flavor             flavor
+	Args               []string
+	BrowserBinary      string
 }
 
 var DefaultBrowserArgs = []string{

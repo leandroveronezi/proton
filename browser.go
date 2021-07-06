@@ -2,6 +2,7 @@ package proton
 
 import (
 	"bufio"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -205,7 +206,7 @@ func (c *Browser) readLoop() {
 			}{}
 			json.Unmarshal(m.Params, &params)
 			if params.TargetID == c.target {
-				c.kill()
+				c.kill(true)
 				return
 			}
 		}
@@ -358,17 +359,6 @@ func (c *Browser) NetworkDisable() error {
 
 }
 
-/*
-maxPostDataSize
-func (c *Browser) NetworkEnable() error {
-
-	_, err := c.send("Network.enable", h{})
-
-	return err
-
-}
-*/
-
 func (c *Browser) close() error {
 
 	_, err := c.send("Browser.close ", h{})
@@ -393,7 +383,7 @@ func (c *Browser) CaptureScreenshot(Parameters ScreenshotParameters) (string, er
 
 }
 
-func (c *Browser) kill() error {
+func (c *Browser) kill(exited bool) error {
 
 	if c.ws != nil {
 
@@ -401,6 +391,10 @@ func (c *Browser) kill() error {
 			return err
 		}
 
+	}
+
+	if exited {
+		return nil
 	}
 
 	// TODO: cancel all pending requests
@@ -416,7 +410,7 @@ func (c *Browser) kill() error {
 			return err
 		}
 
-		//return c.cmd.Process.Kill()
+		return c.cmd.Process.Kill()
 	}
 
 	return nil
@@ -639,8 +633,9 @@ func (_this *Browser) Done() <-chan struct{} {
 }
 
 func (_this *Browser) Close() error {
+
 	// ignore err, as the chrome process might be already dead, when user close the window.
-	_this.kill()
+	_this.kill(false)
 	<-_this.done
 
 	if !_this.config.UserDataDirKeep {
@@ -654,9 +649,45 @@ func (_this *Browser) Close() error {
 
 func (_this *Browser) genEmptyHtml() string {
 
-	template := `data:text/html,<!DOCTYPE html><html><head><title>{{title}}</title></head><body></body></html>`
+	template := `<!DOCTYPE html><html><head><title>{{title}}</title></head><body></body></html>`
+
+	/*
+			template := `
+		<!DOCTYPE html>
+		<html>
+			<head>
+		    <meta charset="utf-8">
+		    <meta name="viewport" content="width=device-width, initial-scale=1">
+		    <title>{{title}}</title>
+
+		    <style>
+		        body, html {
+		            margin: 0;
+		            padding: 0;
+		        }
+		        html,body{height:100%;overflow:hidden}body{background:linear-gradient(to left, #141E30, #243B55);transform:scale(1.2, 1.2)}body>div{border-radius:50%;border:1px solid #fff;transform-style:preserve-3d;transform:rotateX(80deg) rotateY(20deg);position:absolute;left:50%;top:50%;margin-left:-100px;margin-top:-100px}body>div:first-of-type:after{content:"";position:absolute;height:40px;width:40px;background:#fff;border-radius:50%;transform:rotateX(-80deg) rotateY(0);box-shadow:0 0 25px #fff;animation:nucleus_ 2s infinite linear;left:50%;top:50%;margin-top:-20px;margin-left:-20px}body>div:nth-of-type(2){transform:rotateX(-80deg) rotateY(20deg)}body>div:nth-of-type(2)>div,body>div:nth-of-type(2)>div:after{animation-delay:-.5s}body>div:nth-of-type(3){transform:rotateX(-70deg) rotateY(60deg)}body>div:nth-of-type(3)>div,body>div:nth-of-type(3)>div:after{animation-delay:-1s}body>div:nth-of-type(4){transform:rotateX(70deg) rotateY(60deg)}body>div:nth-of-type(4)>div,body>div:nth-of-type(4)>div:after{animation-delay:-1.5s}body>div>div{width:200px;height:200px;position:relative;transform-style:preserve-3d;animation:trail_ 2s infinite linear}body>div>div:after{content:"";position:absolute;top:-5px;box-shadow:0 0 12px #fff;left:50%;margin-left:-5px;width:5px;height:5px;border-radius:50%;background-color:#fff;animation:particle_ 2s infinite linear}@keyframes trail_{from{transform:rotateZ(0deg)}to{transform:rotateZ(360deg)}}@keyframes particle_{from{transform:rotateX(90deg) rotateY(0deg)}to{transform:rotateX(90deg) rotateY(-360deg)}}@keyframes nucleus_{0%, 100%{box-shadow:0 0 0 transparent}50%{box-shadow:0 0 25px #fff}}
+		    </style>
+		    </head>
+		<body>
+			<div>
+			  <div></div>
+			</div>
+			<div>
+			  <div></div>
+			</div>
+			<div>
+			  <div></div>
+			</div>
+			<div>
+			  <div></div>
+			</div>
+		</body></html>
+		`
+	*/
 
 	template = strings.ReplaceAll(template, "{{title}}", _this.config.Title)
+
+	template = "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(template))
 
 	return template
 

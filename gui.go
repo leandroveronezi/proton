@@ -49,7 +49,33 @@ func (_this *Browser) Run(conf ...Config) error {
 	}
 
 	if _this.config.Debug {
-		args = append(args, "--auto-open-devtools-for-tabs")
+		//args = append(args, "--auto-open-devtools-for-tabs")
+		//args = append(args, "--force-devtools-available")
+	}
+
+	if _this.config.StartFullscreen {
+		args = append(args, "--start-fullscreen")
+	}
+
+	if _this.config.Kiosk {
+		args = append(args, "--kiosk")
+	}
+
+	if _this.config.KioskPrinting {
+		args = append(args, "--kiosk-printing")
+	}
+
+	if _this.config.Incognito {
+		args = append(args, "--incognito")
+		args = append(args, "--start-in-incognito")
+	}
+
+	if _this.config.RestoreLastSession {
+		args = append(args, "--restore-last-session")
+	}
+
+	if _this.config.SilentLaunch {
+		args = append(args, "--silent-launch")
 	}
 
 	args = append(args, "--remote-debugging-port=0")
@@ -81,7 +107,7 @@ func (_this *Browser) makeBrowser() error {
 	re := regexp.MustCompile(`^DevTools listening on (ws://.*?)\r?\n$`)
 	m, err := readUntilMatch(pipe, re)
 	if err != nil {
-		_this.kill()
+		_this.kill(false)
 		return err
 	}
 	wsURL := m[1]
@@ -89,20 +115,20 @@ func (_this *Browser) makeBrowser() error {
 	// Open a websocket
 	_this.ws, err = websocket.Dial(wsURL, "", "http://127.0.0.1")
 	if err != nil {
-		_this.kill()
+		_this.kill(false)
 		return err
 	}
 
 	// Find target and initialize session
 	_this.target, err = _this.findTarget()
 	if err != nil {
-		_this.kill()
+		_this.kill(false)
 		return err
 	}
 
 	_this.session, err = _this.startSession(_this.target)
 	if err != nil {
-		_this.kill()
+		_this.kill(false)
 		return err
 	}
 
@@ -119,7 +145,7 @@ func (_this *Browser) makeBrowser() error {
 	} {
 
 		if _, err := _this.send(method, args); err != nil {
-			_this.kill()
+			_this.kill(false)
 			_this.cmd.Wait()
 			return err
 		}
@@ -129,7 +155,7 @@ func (_this *Browser) makeBrowser() error {
 	if !contains(_this.config.Args, "--headless") {
 		win, err := _this.getWindowForTarget(_this.target)
 		if err != nil {
-			_this.kill()
+			_this.kill(false)
 			return err
 		}
 		_this.window = win.WindowID
