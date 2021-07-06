@@ -239,10 +239,6 @@ func (_this *Browser) send(method string, params h) (json.RawMessage, error) {
 	return res.Value, res.Err
 }
 
-func (_this *Browser) eval(expr string) (json.RawMessage, error) {
-	return _this.send("Runtime.evaluate", h{"expression": expr, "awaitPromise": true, "returnByValue": true})
-}
-
 func (_this *Browser) bind(name string, f bindingFunc) error {
 	_this.Lock()
 	// check if binding already exists
@@ -289,7 +285,12 @@ func (_this *Browser) bind(name string, f bindingFunc) error {
 	if err != nil {
 		return err
 	}
-	_, err = _this.eval(script)
+
+	awaitPromise := true
+	returnByValue := true
+
+	_, err = _this.RuntimeEvaluate(RuntimeEvaluateParameters{Expression: script, AwaitPromise: &awaitPromise, ReturnByValue: &returnByValue})
+
 	return err
 }
 
@@ -453,7 +454,11 @@ func (_this *Browser) Bind(name string, f interface{}) error {
 }
 
 func (_this *Browser) Eval(js string) Value {
-	v, err := _this.eval(js)
+
+	awaitPromise := true
+	returnByValue := true
+
+	v, err := _this.RuntimeEvaluate(RuntimeEvaluateParameters{Expression: js, AwaitPromise: &awaitPromise, ReturnByValue: &returnByValue})
 	return value{err: err, raw: v}
 }
 

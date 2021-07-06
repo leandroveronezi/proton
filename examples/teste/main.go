@@ -18,7 +18,7 @@ func main() {
 	conf.Args = proton.DefaultBrowserArgs
 	conf.UserDataDir = "./userdata"
 	conf.UserDataDirKeep = true
-	conf.Flavor = proton.Chrome
+	conf.Flavor = proton.Edge
 
 	browser := proton.Browser{}
 

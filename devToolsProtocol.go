@@ -3,7 +3,7 @@ package proton
 import "encoding/json"
 
 /*
-Capture page screenshot
+PageCaptureScreenshot Capture page screenshot
 */
 func (_this *Browser) PageCaptureScreenshot(Parameters PageCaptureScreenshotParameters) (string, error) {
 
@@ -23,7 +23,7 @@ func (_this *Browser) PageCaptureScreenshot(Parameters PageCaptureScreenshotPara
 }
 
 /*
-Reloads given page optionally ignoring the cache.
+PageReload Reloads given page optionally ignoring the cache.
 */
 func (_this *Browser) PageReload() error {
 
@@ -34,7 +34,7 @@ func (_this *Browser) PageReload() error {
 }
 
 /*
-Resets navigation history for the current page.
+PageResetNavigationHistory Resets navigation history for the current page.
 */
 func (_this *Browser) PageResetNavigationHistory() error {
 
@@ -45,7 +45,7 @@ func (_this *Browser) PageResetNavigationHistory() error {
 }
 
 /*
-Force the page stop all navigations and pending resource fetches.
+PageStopLoading Force the page stop all navigations and pending resource fetches.
 */
 func (_this *Browser) PageStopLoading() error {
 
@@ -56,7 +56,7 @@ func (_this *Browser) PageStopLoading() error {
 }
 
 /*
-Brings page to front (activates tab).
+PageBringToFront Brings page to front (activates tab).
 */
 func (_this *Browser) PageBringToFront() error {
 
@@ -67,7 +67,7 @@ func (_this *Browser) PageBringToFront() error {
 }
 
 /*
-Print page as PDF.
+PagePrintToPDF Print page as PDF.
 */
 func (_this *Browser) PagePrintToPDF(Parameters PrintToPDFParameters) (string, error) {
 
@@ -87,7 +87,7 @@ func (_this *Browser) PagePrintToPDF(Parameters PrintToPDFParameters) (string, e
 }
 
 /*
-Navigates current page to the given URL.
+PageNavigate Navigates current page to the given URL.
 */
 func (_this *Browser) PageNavigate(url string) error {
 	_, err := _this.send("Page.navigate", h{"url": url})
@@ -95,7 +95,7 @@ func (_this *Browser) PageNavigate(url string) error {
 }
 
 /*
-Close browser gracefully.
+BrowserClose Close browser gracefully.
 */
 func (_this *Browser) BrowserClose() error {
 
@@ -105,7 +105,7 @@ func (_this *Browser) BrowserClose() error {
 }
 
 /*
-Returns version information.
+BrowserGetVersion Returns version information.
 */
 func (_this *Browser) BrowserGetVersion() (Version, error) {
 	result, err := _this.send("Browser.getVersion", h{})
@@ -121,7 +121,7 @@ func (_this *Browser) BrowserGetVersion() (Version, error) {
 }
 
 /*
-Clears browser cache.
+BrowserClearBrowserCache Clears browser cache.
 */
 func (_this *Browser) BrowserClearBrowserCache() error {
 
@@ -132,7 +132,7 @@ func (_this *Browser) BrowserClearBrowserCache() error {
 }
 
 /*
-Clears browser cookies.
+BrowserClearBrowserCookies Clears browser cookies.
 */
 func (_this *Browser) BrowserClearBrowserCookies() error {
 
@@ -140,4 +140,12 @@ func (_this *Browser) BrowserClearBrowserCookies() error {
 
 	return err
 
+}
+
+/*
+RuntimeEvaluate Evaluates expression on global object.
+*/
+func (_this *Browser) RuntimeEvaluate(Parameters RuntimeEvaluateParameters) (json.RawMessage, error) {
+
+	return _this.send("Runtime.evaluate", structToMap(Parameters))
 }

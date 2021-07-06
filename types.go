@@ -131,3 +131,18 @@ type PrintToPDFParameters struct {
 	FooterTemplate    *string `json:"footerTemplate"`
 	PreferCSSPageSize *bool   `json:"preferCSSPageSize"`
 }
+
+type RuntimeEvaluateParameters struct {
+	Expression            string  `json:"expression"`
+	ObjectGroup           *string `json:"objectGroup"`
+	IncludeCommandLineAPI *bool   `json:"includeCommandLineAPI"`
+	Silent                *bool   `json:"silent"`
+	ContextId             *int    `json:"contextId"`
+	ReturnByValue         *bool   `json:"returnByValue"`
+	GeneratePreview       *bool   `json:"generatePreview"`
+	UserGesture           *bool   `json:"userGesture"`
+	AwaitPromise          *bool   `json:"awaitPromise"`
+	ThrowOnSideEffect     *bool   `json:"throwOnSideEffect"`
+	Timeout               *int    `json:"timeout"`
+	DisableBreaks         *bool   `json:"disableBreaks"`
+}
