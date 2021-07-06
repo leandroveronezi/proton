@@ -1,12 +1,27 @@
 package proton
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"testing"
 )
 
 var errTest = errors.New("fail")
+
+func TestRawValue(t *testing.T) {
+	var v Value
+
+	v = value{raw: json.RawMessage(nil)}
+	if v.Bytes() != nil {
+		t.Fail()
+	}
+
+	v = value{raw: json.RawMessage(`"hello"`)}
+	if !bytes.Equal(v.Bytes(), []byte(`"hello"`)) {
+		t.Fail()
+	}
+}
 
 func TestValueError(t *testing.T) {
 	v := value{err: errTest}

@@ -137,9 +137,8 @@ func (c *Browser) readLoop() {
 			if res.ID == 0 && res.Method == "Runtime.consoleAPICalled" || res.Method == "Runtime.exceptionThrown" {
 
 				if c.config.Debug {
-
+					log.Println(params.Message)
 				}
-				log.Println(params.Message)
 
 			} else if res.ID == 0 && res.Method == "Runtime.bindingCalled" {
 				payload := struct {
@@ -224,7 +223,9 @@ func (c *Browser) send(method string, params h) (json.RawMessage, error) {
 	c.pending[int(id)] = resc
 	c.Unlock()
 
-	log.Println(string(b))
+	if c.config.Debug {
+		log.Println(string(b))
+	}
 
 	if err := websocket.JSON.Send(c.ws, h{
 		"id":     int(id),
@@ -393,15 +394,31 @@ func (c *Browser) CaptureScreenshot(Parameters ScreenshotParameters) (string, er
 }
 
 func (c *Browser) kill() error {
+
 	if c.ws != nil {
+
 		if err := c.ws.Close(); err != nil {
 			return err
 		}
+
 	}
+
 	// TODO: cancel all pending requests
 	if state := c.cmd.ProcessState; state == nil || !state.Exited() {
-		return c.cmd.Process.Kill()
+
+		sig := os.Interrupt
+
+		if runtime.GOOS == "windows" {
+			sig = os.Kill
+		}
+
+		if err := c.cmd.Process.Signal(sig); err != nil {
+			return err
+		}
+
+		//return c.cmd.Process.Kill()
 	}
+
 	return nil
 }
 
@@ -537,17 +554,29 @@ func (_this *Browser) browserBinary() string {
 func (_this *Browser) browserBinaryEdge() string {
 
 	var paths []string
+
 	switch runtime.GOOS {
 	case "darwin":
-		return ""
+
+		paths = []string{
+			"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+		}
+
 	case "windows":
+
 		paths = []string{
 			os.Getenv("LocalAppData") + "/Microsoft/Edge/Application/msedge.exe",
 			os.Getenv("ProgramFiles") + "/Microsoft/Edge/Application/msedge.exe",
 			os.Getenv("ProgramFiles(x86)") + "/Microsoft/Edge/Application/msedge.exe",
 		}
+
 	default:
-		return ""
+
+		paths = []string{
+			"/usr/bin/microsoft-edge",
+			"/usr/bin/microsoft-edge-dev",
+		}
+
 	}
 
 	for _, path := range paths {
@@ -556,6 +585,7 @@ func (_this *Browser) browserBinaryEdge() string {
 		}
 		return path
 	}
+
 	return ""
 
 }

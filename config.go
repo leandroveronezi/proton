@@ -46,4 +46,6 @@ var DefaultBrowserArgs = []string{
 	"--password-store=basic",
 	"--use-mock-keychain",
 	"--disable-dinosaur-easter-egg",
+	"--disable-windows10-custom-titlebar",
+	"--no-default-browser-check",
 }
