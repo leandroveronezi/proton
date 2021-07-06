@@ -239,11 +239,6 @@ func (_this *Browser) send(method string, params h) (json.RawMessage, error) {
 	return res.Value, res.Err
 }
 
-func (_this *Browser) Navigate(url string) error {
-	_, err := _this.send("Page.navigate", h{"url": url})
-	return err
-}
-
 func (_this *Browser) eval(expr string) (json.RawMessage, error) {
 	return _this.send("Runtime.evaluate", h{"expression": expr, "awaitPromise": true, "returnByValue": true})
 }
@@ -320,69 +315,6 @@ func (_this *Browser) bounds() (Bounds, error) {
 	}{}
 	err = json.Unmarshal(result, &bounds)
 	return bounds.Bounds, err
-}
-
-func (_this *Browser) GetVersion() (Version, error) {
-	result, err := _this.send("Browser.getVersion", h{})
-
-	if err != nil {
-		return Version{}, err
-	}
-
-	version := Version{}
-	err = json.Unmarshal(result, &version)
-	return version, err
-
-}
-
-func (_this *Browser) ClearBrowserCache() error {
-
-	_, err := _this.send("Browser.clearBrowserCache", h{})
-
-	return err
-
-}
-
-func (_this *Browser) ClearBrowserCookies() error {
-
-	_, err := _this.send("Browser.clearBrowserCookies", h{})
-
-	return err
-
-}
-
-func (_this *Browser) NetworkDisable() error {
-
-	_, err := _this.send("Network.disable", h{})
-
-	return err
-
-}
-
-/*
-func (_this *Browser) close() error {
-
-	_, err := _this.send("Browser.close ", h{})
-
-	return err
-}
-*/
-
-func (_this *Browser) CaptureScreenshot(Parameters ScreenshotParameters) (string, error) {
-
-	result, err := _this.send("Page.captureScreenshot", structToMap(Parameters))
-
-	if err != nil {
-		return "", err
-	}
-
-	data := struct {
-		Data string `json:"data"`
-	}{}
-
-	err = json.Unmarshal(result, &data)
-	return data.Data, err
-
 }
 
 func (_this *Browser) kill(exited bool) error {

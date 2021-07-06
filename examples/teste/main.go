@@ -11,12 +11,14 @@ func main() {
 
 	conf := proton.Config{}
 
+	conf.WindowState = proton.WindowStateFullscreen
+
 	conf.Title = "Photon First Test"
 	conf.Debug = false
 	conf.Args = proton.DefaultBrowserArgs
 	conf.UserDataDir = "./userdata"
 	conf.UserDataDirKeep = true
-	conf.Flavor = proton.Edge
+	conf.Flavor = proton.Chrome
 
 	browser := proton.Browser{}
 
@@ -27,19 +29,27 @@ func main() {
 		return
 	}
 
+	defer func() {
+		browser.BrowserClose()
+	}()
+
 	browser.Bind("ola", func() string {
 		return "mundo"
 	})
 
 	browser.Bind("goVersion", func() (proton.Version, error) {
-		return browser.GetVersion()
+		return browser.BrowserGetVersion()
 	})
 
 	browser.Bind("captureScreenshot", func() (string, error) {
-		return browser.CaptureScreenshot(proton.ScreenshotParameters{Format: proton.JPEG.Pointer()})
+		return browser.PageCaptureScreenshot(proton.PageCaptureScreenshotParameters{Format: proton.JPEG.Pointer()})
 	})
 
-	browser.Navigate("https://www.wikipedia.org")
+	browser.Bind("printToPDF", func() (string, error) {
+		return browser.PagePrintToPDF(proton.PrintToPDFParameters{})
+	})
+
+	browser.PageNavigate("https://www.wikipedia.org")
 
 	sigc := make(chan os.Signal)
 	signal.Notify(sigc, os.Interrupt)

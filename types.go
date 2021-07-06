@@ -94,8 +94,40 @@ type Viewport struct {
 	Scale  int `json:"scale"`
 }
 
-type ScreenshotParameters struct {
+type PageCaptureScreenshotParameters struct {
 	Format  *ScreenshotFormat `json:"format"`
 	Quality *int              `json:"quality"`
 	Clip    *Viewport         `json:"clip"`
+}
+
+type PageReloadParameters struct {
+	IgnoreCache            *bool   `json:"ignoreCache"`
+	ScriptToEvaluateOnLoad *string `json:"scriptToEvaluateOnLoad"`
+}
+
+type PrintToPDFParameters struct {
+	Landscape               *bool   `json:"landscape"`
+	DisplayHeaderFooter     *bool   `json:"displayHeaderFooter"`
+	PrintBackground         *bool   `json:"printBackground"`
+	Scale                   *int    `json:"scale"`
+	PaperWidth              *int    `json:"paperWidth"`
+	PaperHeight             *int    `json:"paperHeight"`
+	MarginTop               *int    `json:"marginTop"`
+	MarginBottom            *int    `json:"marginBottom"`
+	MarginLeft              *int    `json:"marginLeft"`
+	MarginRight             *int    `json:"marginRight"`
+	PageRanges              *string `json:"pageRanges"`
+	IgnoreInvalidPageRanges *bool   `json:"ignoreInvalidPageRanges"`
+
+	/*
+		date: formatted print date
+		title: document title
+		url: document location
+		pageNumber: current page number
+		totalPages: total pages in the document
+	*/
+
+	HeaderTemplate    *string `json:"headerTemplate"`
+	FooterTemplate    *string `json:"footerTemplate"`
+	PreferCSSPageSize *bool   `json:"preferCSSPageSize"`
 }
