@@ -68,8 +68,6 @@ func main() {
 }
 ```
 
-<p align="center"><img src="examples/counter/counter.gif" /></p>
-
 Also, see [examples](examples) for more details about binding functions and packaging binaries.
 
 ## Hello World
