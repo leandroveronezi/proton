@@ -28,44 +28,45 @@
 package main
 
 import (
-  "github.com/leandroveronezi/proton"
-  "log"
-  "os"
-  "os/signal"
+	"github.com/leandroveronezi/proton"
+	"log"
+	"os"
+	"os/signal"
 )
 
 func main() {
 
-  conf := proton.Config{}
+	conf := proton.Config{}
 
-  conf.WindowState = proton.WindowStateMaximized
-  conf.Title = "Photon"
-  conf.Args = proton.DefaultBrowserArgs
-  conf.UserDataDir = "./userdata"
-  conf.UserDataDirKeep = true
-  conf.Flavor = proton.Edge
+	conf.WindowState = proton.WindowStateMaximized
+	conf.Title = "Photon"
+	conf.Args = proton.DefaultBrowserArgs
+	conf.UserDataDir = "./userdata"
+	conf.UserDataDirKeep = true
+	conf.Flavor = proton.Edge
 
-  browser := proton.Browser{}
+	browser := proton.Browser{}
 
-  err := browser.Run(conf)
+	err := browser.Run(conf)
 
-  if err != nil {
-    log.Fatal(err)
-    return
-  }
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
 
-  defer browser.BrowserClose()
+	defer browser.BrowserClose()
 
-  browser.PageNavigate("https://www.wikipedia.org")
+    browser.PageNavigate(proton.PageNavigateParameters{Url: "https://www.wikipedia.org"})
 
-  sigc := make(chan os.Signal)
-  signal.Notify(sigc, os.Interrupt)
-  select {
-  case <-sigc:
-  case <-browser.Done():
-  }
+	sigc := make(chan os.Signal)
+	signal.Notify(sigc, os.Interrupt)
+	select {
+	case <-sigc:
+	case <-browser.Done():
+	}
 
 }
+
 ```
 
 Also, see [examples](examples) for more details about binding functions and packaging binaries.

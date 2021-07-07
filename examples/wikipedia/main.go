@@ -29,7 +29,7 @@ func main() {
 
 	defer browser.BrowserClose()
 
-	browser.PageNavigate("https://www.wikipedia.org")
+	browser.PageNavigate(proton.PageNavigateParameters{Url: "https://www.wikipedia.org"})
 
 	sigc := make(chan os.Signal)
 	signal.Notify(sigc, os.Interrupt)

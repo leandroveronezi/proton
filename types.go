@@ -75,29 +75,36 @@ type Version struct {
 	JsVersion       string `json:"jsVersion"`
 }
 
-type ScreenshotFormat string
+type ScreenshotFormatType string
 
 const (
-	JPEG ScreenshotFormat = "jpeg"
-	PNG  ScreenshotFormat = "png"
+	JPEG ScreenshotFormatType = "jpeg"
+	PNG  ScreenshotFormatType = "png"
+	WEBP ScreenshotFormatType = "webp"
 )
 
-func (_this ScreenshotFormat) Pointer() *ScreenshotFormat {
+func (_this ScreenshotFormatType) Pointer() *ScreenshotFormatType {
 	return &_this
 }
 
-type Viewport struct {
-	X      int `json:"x"`
-	Y      int `json:"y"`
-	Width  int `json:"width"`
-	Height int `json:"height"`
-	Scale  int `json:"scale"`
+type ViewportType struct {
+	X      int `json:"x"`      //X offset in device independent pixels (dip).
+	Y      int `json:"y"`      //Y offset in device independent pixels (dip).
+	Width  int `json:"width"`  //Rectangle width in device independent pixels (dip).
+	Height int `json:"height"` //Rectangle height in device independent pixels (dip).
+	Scale  int `json:"scale"`  //Page scale factor.
 }
 
+//Page.captureScreenshot Parameters
 type PageCaptureScreenshotParameters struct {
-	Format  *ScreenshotFormat `json:"format"`
-	Quality *int              `json:"quality"`
-	Clip    *Viewport         `json:"clip"`
+	Format  *ScreenshotFormatType `json:"format"`  //Image compression format (defaults to png). Allowed Values: jpeg, png, webp
+	Quality *int                  `json:"quality"` //Compression quality from range [0..100] (jpeg only).
+	Clip    *ViewportType         `json:"clip"`    //Capture the screenshot of a given region only.
+}
+
+//Page.captureScreenshot Return
+type PageCaptureScreenshotReturn struct {
+	Data string `json:"data"` //Base64-encoded image data. (Encoded as a base64 string when passed over JSON)
 }
 
 type PageReloadParameters struct {
@@ -105,31 +112,28 @@ type PageReloadParameters struct {
 	ScriptToEvaluateOnLoad *string `json:"scriptToEvaluateOnLoad"`
 }
 
+//Page.printToPDF Parameters
 type PrintToPDFParameters struct {
-	Landscape               *bool   `json:"landscape"`
-	DisplayHeaderFooter     *bool   `json:"displayHeaderFooter"`
-	PrintBackground         *bool   `json:"printBackground"`
-	Scale                   *int    `json:"scale"`
-	PaperWidth              *int    `json:"paperWidth"`
-	PaperHeight             *int    `json:"paperHeight"`
-	MarginTop               *int    `json:"marginTop"`
-	MarginBottom            *int    `json:"marginBottom"`
-	MarginLeft              *int    `json:"marginLeft"`
-	MarginRight             *int    `json:"marginRight"`
-	PageRanges              *string `json:"pageRanges"`
-	IgnoreInvalidPageRanges *bool   `json:"ignoreInvalidPageRanges"`
+	Landscape               *bool   `json:"landscape"`               //Paper orientation. Defaults to false.
+	DisplayHeaderFooter     *bool   `json:"displayHeaderFooter"`     //Display header and footer. Defaults to false.
+	PrintBackground         *bool   `json:"printBackground"`         //Print background graphics. Defaults to false.
+	Scale                   *int    `json:"scale"`                   //Scale of the webpage rendering. Defaults to 1.
+	PaperWidth              *int    `json:"paperWidth"`              //Paper width in inches. Defaults to 8.5 inches.
+	PaperHeight             *int    `json:"paperHeight"`             //Paper height in inches. Defaults to 11 inches.
+	MarginTop               *int    `json:"marginTop"`               //Top margin in inches. Defaults to 1cm (~0.4 inches).
+	MarginBottom            *int    `json:"marginBottom"`            //Bottom margin in inches. Defaults to 1cm (~0.4 inches).
+	MarginLeft              *int    `json:"marginLeft"`              //Left margin in inches. Defaults to 1cm (~0.4 inches).
+	MarginRight             *int    `json:"marginRight"`             //Right margin in inches. Defaults to 1cm (~0.4 inches).
+	PageRanges              *string `json:"pageRanges"`              //Paper ranges to print, e.g., '1-5, 8, 11-13'. Defaults to the empty string, which means print all pages.
+	IgnoreInvalidPageRanges *bool   `json:"ignoreInvalidPageRanges"` //Whether to silently ignore invalid but successfully parsed page ranges, such as '3-2'. Defaults to false.
+	HeaderTemplate          *string `json:"headerTemplate"`          //HTML template for the print header. Should be valid HTML markup with following classes used to inject printing values into them: date: formatted print date title: document title, url: document location, pageNumber: current page number, totalPages: total pages in the document
+	FooterTemplate          *string `json:"footerTemplate"`          //HTML template for the print footer. Should use the same format as the
+	PreferCSSPageSize       *bool   `json:"preferCSSPageSize"`       //Whether or not to prefer page size as defined by css. Defaults to false, in which case the content will be scaled to fit the paper size.
+}
 
-	/*
-		date: formatted print date
-		title: document title
-		url: document location
-		pageNumber: current page number
-		totalPages: total pages in the document
-	*/
-
-	HeaderTemplate    *string `json:"headerTemplate"`
-	FooterTemplate    *string `json:"footerTemplate"`
-	PreferCSSPageSize *bool   `json:"preferCSSPageSize"`
+//Page.printToPDF Return
+type PrintToPDFReturn struct {
+	Data string `json:"data"` //Base64-encoded image data. (Encoded as a base64 string when passed over JSON)
 }
 
 type RuntimeEvaluateParameters struct {
@@ -145,4 +149,59 @@ type RuntimeEvaluateParameters struct {
 	ThrowOnSideEffect     *bool   `json:"throwOnSideEffect"`
 	Timeout               *int    `json:"timeout"`
 	DisableBreaks         *bool   `json:"disableBreaks"`
+}
+
+type TransitionType string
+
+const (
+	Link             TransitionType = "link"
+	Typed            TransitionType = "typed"
+	AddressBar       TransitionType = "address_bar"
+	AutoBookmark     TransitionType = "auto_bookmark"
+	AutoSubframe     TransitionType = "auto_subframe"
+	ManualSubframe   TransitionType = "manual_subframe"
+	Generated        TransitionType = "generated"
+	AutoToplevel     TransitionType = "auto_toplevel"
+	FormSubmit       TransitionType = "form_submit"
+	Reload           TransitionType = "reload"
+	Keyword          TransitionType = "keyword"
+	KeywordGenerated TransitionType = "keyword_generated"
+	Other            TransitionType = "other"
+)
+
+func (_this TransitionType) Pointer() *TransitionType {
+	return &_this
+}
+
+//Page.navigate Parameters
+type PageNavigateParameters struct {
+	Url            string          `json:"url"`            //URL to navigate the page to.
+	Referrer       *string         `json:"referrer"`       //Referrer URL.
+	TransitionType *TransitionType `json:"transitionType"` //Intended transition type.
+	FrameId        *string         `json:"frameId"`        //Frame id to navigate, if not specified navigates the top frame.
+}
+
+//Page.navigate Return
+type PageNavigateReturn struct {
+	FrameId   string  `json:"frameId"`   //Frame id that has navigated (or failed to navigate)
+	LoaderId  *string `json:"loaderId"`  //Loader identifier.
+	ErrorText *string `json:"errorText"` //User friendly error message, present if and only if navigation has failed.
+}
+
+//Page.setDocumentContent Parameters
+type PageSetDocumentContentParameters struct {
+	FrameId *string `json:"frameId"` //Frame id to set HTML for.
+	Html    string  `json:"html"`    //HTML content to set.
+}
+
+type ScriptIdentifierType string //Unique script identifier.
+
+type PageremoveScriptToEvaluateOnNewDocumentParameters struct {
+	Identifier ScriptIdentifierType `json:"identifier"` //Unique script identifier.
+}
+
+//Page.handleJavaScriptDialog Parameters
+type PageHandleJavaScriptDialogParameters struct {
+	Accept     bool    `json:"accept"`     //Whether to accept or dismiss the dialog.
+	PromptText *string `json:"promptText"` //The text to enter into the dialog prompt before accepting. Used only if this is a prompt dialog.
 }
