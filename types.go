@@ -67,12 +67,13 @@ type targetMessage struct {
 	} `json:"result"`
 }
 
-type Version struct {
-	ProtocolVersion string `json:"protocolVersion"`
-	Product         string `json:"product"`
-	Revision        string `json:"revision"`
-	UserAgent       string `json:"userAgent"`
-	JsVersion       string `json:"jsVersion"`
+//Browser.getVersion Return
+type BrowserGetVersionReturn struct {
+	ProtocolVersion string `json:"protocolVersion"` //Protocol version
+	Product         string `json:"product"`         //Product name
+	Revision        string `json:"revision"`        //Product revision
+	UserAgent       string `json:"userAgent"`       //User-Agent
+	JsVersion       string `json:"jsVersion"`       //V8 version
 }
 
 type ScreenshotFormatType string

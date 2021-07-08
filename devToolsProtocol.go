@@ -3,32 +3,6 @@ package proton
 import "encoding/json"
 
 /*
-BrowserClose Close browser gracefully.
-*/
-func (_this *Browser) BrowserClose() error {
-
-	_, err := _this.send("Browser.close", h{})
-
-	return err
-}
-
-/*
-BrowserGetVersion Returns version information.
-*/
-func (_this *Browser) BrowserGetVersion() (Version, error) {
-	result, err := _this.send("Browser.getVersion", h{})
-
-	if err != nil {
-		return Version{}, err
-	}
-
-	version := Version{}
-	err = json.Unmarshal(result, &version)
-	return version, err
-
-}
-
-/*
 BrowserClearBrowserCache Clears browser cache.
 */
 func (_this *Browser) BrowserClearBrowserCache() error {
