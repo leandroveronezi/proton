@@ -16,4 +16,7 @@
 .idea
 /examples/teste/userdata
 /examples/teste/go.sum
+/examples/teste/go.sum
+/examples/wikipedia/userdata
+
 go.sum
