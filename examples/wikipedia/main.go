@@ -27,7 +27,19 @@ func main() {
 		return
 	}
 
-	defer browser.BrowserClose()
+	defer func() {
+		browser.BrowserClose()
+		//browser.Close()
+	}()
+
+	browser.Bind("Hello", func() string {
+		return "World!"
+	})
+
+	browser.Bind("Close", func() bool {
+		browser.BrowserClose()
+		return true
+	})
 
 	browser.PageNavigate(proton.PageNavigateParameters{Url: "https://www.wikipedia.org"})
 
