@@ -19,5 +19,7 @@
 /examples/teste/go.sum
 /examples/teste/go.sum
 /examples/wikipedia/userdata
+/examples/wikipedia/go.mod
+/examples/wikipedia/go.sum
 
 go.sum
