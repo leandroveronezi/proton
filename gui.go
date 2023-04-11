@@ -79,7 +79,8 @@ func (_this *Browser) Run(conf ...Config) error {
 	}
 
 	args = append(args, "--remote-debugging-port=0")
-
+	args = append(args, "--remote-allow-origins=*")
+		
 	_this.config.Args = args
 
 	return _this.makeBrowser()
